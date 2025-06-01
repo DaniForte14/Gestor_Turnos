@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.logging.Logger;
 
 @Service
@@ -19,7 +20,7 @@ public class UserService {
     }
 
     @Transactional
-    public User registerUser(User user) {
+    public User createUser(User user) {
         try {
             // Validar que el usuario no exista
             if (userRepository.existsByUsername(user.getUsername())) {
@@ -29,12 +30,20 @@ public class UserService {
                 throw new RuntimeException("El correo electrónico ya está registrado");
             }
             
-            // Guardar la contraseña en texto plano (solo para desarrollo)
-            logger.warning("ATENCIÓN: Las contraseñas se están guardando en texto plano - NO USAR EN PRODUCCIÓN");
+            // En producción, deberíamos codificar la contraseña aquí
+            // user.setPassword(passwordEncoder.encode(user.getPassword()));
+            
+            // Para desarrollo, mantenemos la contraseña en texto plano
+            // ya que estamos usando NoOpPasswordEncoder
+            
+            // Establecer el rol por defecto si no se especifica
+            if (user.getRole() == null) {
+                user.setRole(Role.ROLE_USER);
+            }
             
             // Guardar el usuario
             User savedUser = userRepository.save(user);
-            logger.info("Usuario registrado exitosamente con ID: " + savedUser.getId());
+            logger.info("Usuario creado exitosamente con ID: " + savedUser.getId());
             return savedUser;
             
         } catch (Exception e) {
@@ -43,7 +52,11 @@ public class UserService {
         }
     }
 
-    public User findByUsername(String username) {
+    public Optional<User> findByUsername(String username) {
+        return userRepository.findByUsername(username);
+    }
+    
+    public User getByUsername(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + username));
     }
@@ -53,7 +66,12 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con el email: " + email));
     }
     
-    public User findByUsernameOrEmail(String username, String email) {
+    public Optional<User> findByUsernameOrEmail(String username, String email) {
+        System.out.println("Buscando usuario por username o email: " + username + " / " + email);
+        return userRepository.findByUsernameOrEmail(username, email);
+    }
+    
+    public User getUserByUsernameOrEmail(String username, String email) {
         System.out.println("Buscando usuario por username o email: " + username + " / " + email);
         return userRepository.findByUsernameOrEmail(username, email)
                 .orElseThrow(() -> {
@@ -138,12 +156,12 @@ public class UserService {
     public boolean hasRole(Long userId, String roleName) {
         try {
             User user = findUserById(userId);
-            if (user == null || user.getRoles() == null) {
+            if (user == null || user.getRole() == null) {
                 return false;
             }
             // Convert roleName to Role enum and compare
             Role targetRole = Role.valueOf(roleName);
-            return user.getRoles().contains(targetRole);
+            return user.getRole() == targetRole;
         } catch (IllegalArgumentException e) {
             // Role name doesn't match any enum value
             logger.warning("Invalid role name: " + roleName);

@@ -8,8 +8,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import java.util.Collections;
-import java.util.HashSet;
+import java.time.LocalDateTime;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -33,7 +32,10 @@ public class DataInitializer implements CommandLineRunner {
             admin.setEmail("admin@hospital.com");
             admin.setCentroTrabajo("Hospital Central");
             admin.setLocalidad("Ciudad Principal");
-            admin.setRoles(new HashSet<>(Collections.singletonList(Role.ROLE_MEDICO)));
+            admin.setTelefono("123456789");
+            admin.setRole(Role.ROLE_ADMIN);
+            admin.setCreatedAt(LocalDateTime.now());
+            admin.setUpdatedAt(LocalDateTime.now());
             userRepository.save(admin);
 
             // Médico de prueba
@@ -45,7 +47,10 @@ public class DataInitializer implements CommandLineRunner {
             medico.setEmail("carlos.garcia@hospital.com");
             medico.setCentroTrabajo("Hospital Central");
             medico.setLocalidad("Ciudad Principal");
-            medico.setRoles(new HashSet<>(Collections.singletonList(Role.ROLE_MEDICO)));
+            medico.setTelefono("987654321");
+            medico.setRole(Role.ROLE_MEDICO);
+            medico.setCreatedAt(LocalDateTime.now());
+            medico.setUpdatedAt(LocalDateTime.now());
             userRepository.save(medico);
 
             // Enfermero de prueba
@@ -57,20 +62,26 @@ public class DataInitializer implements CommandLineRunner {
             enfermero.setEmail("ana.martinez@hospital.com");
             enfermero.setCentroTrabajo("Hospital Central");
             enfermero.setLocalidad("Ciudad Principal");
-            enfermero.setRoles(new HashSet<>(Collections.singletonList(Role.ROLE_ENFERMERO)));
+            enfermero.setTelefono("654321987");
+            enfermero.setRole(Role.ROLE_ENFERMERO);
+            enfermero.setCreatedAt(LocalDateTime.now());
+            enfermero.setUpdatedAt(LocalDateTime.now());
             userRepository.save(enfermero);
 
-            // TCAE de prueba
-            User tcae = new User();
-            tcae.setUsername("tcae1");
-            tcae.setPassword(passwordEncoder.encode("tcae123"));
-            tcae.setNombre("Laura");
-            tcae.setApellidos("Sánchez Pérez");
-            tcae.setEmail("laura.sanchez@hospital.com");
-            tcae.setCentroTrabajo("Hospital Central");
-            tcae.setLocalidad("Ciudad Principal");
-            tcae.setRoles(new HashSet<>(Collections.singletonList(Role.ROLE_TCAE)));
-            userRepository.save(tcae);
+            // Auxiliar de enfermería de prueba
+            User auxiliar = new User();
+            auxiliar.setUsername("auxiliar1");
+            auxiliar.setPassword(passwordEncoder.encode("auxiliar123"));
+            auxiliar.setNombre("Laura");
+            auxiliar.setApellidos("Sánchez Pérez");
+            auxiliar.setEmail("laura.sanchez@hospital.com");
+            auxiliar.setCentroTrabajo("Hospital Central");
+            auxiliar.setLocalidad("Ciudad Principal");
+            auxiliar.setTelefono("321654987");
+            auxiliar.setRole(Role.ROLE_AUXILIAR);
+            auxiliar.setCreatedAt(LocalDateTime.now());
+            auxiliar.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(auxiliar);
         }
     }
 }

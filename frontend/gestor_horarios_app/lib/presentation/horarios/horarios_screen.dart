@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:gestor_horarios_app/core/theme/app_theme.dart';
 import 'package:gestor_horarios_app/data/models/horario.dart';
 import 'package:gestor_horarios_app/data/repositories/horario_repository.dart';
-import 'package:gestor_horarios_app/presentation/horarios_disponibles_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -168,27 +167,7 @@ class _HorariosScreenState extends State<HorariosScreen> {
           ),
         ],
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 20.0, right: 20.0),
-        child: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HorariosDisponiblesScreen(
-                  selectedDate: _selectedDay,
-                ),
-              ),
-            );
-          },
-          child: const Icon(Icons.add, size: 32),
-          tooltip: 'Solicitar Horarios',
-          backgroundColor: Theme.of(context).primaryColor,
-          elevation: 8.0,
-          heroTag: 'solicitar_horarios_btn',
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
     );
   }
 

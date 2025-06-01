@@ -1,4 +1,4 @@
-import 'user.dart';
+import 'package:gestor_horarios_app/data/models/user.dart';
 
 class Vehiculo {
   final int? id;
@@ -6,9 +6,11 @@ class Vehiculo {
   final String modelo;
   final String matricula;
   final String? color;
-  final int? plazas;
+  final int? asientosDisponibles;
+  final String? observaciones;
   final User? propietario;
   final int? propietarioId;
+  final String? propietarioNombre;
   final bool activo;
 
   Vehiculo({
@@ -17,9 +19,11 @@ class Vehiculo {
     required this.modelo,
     required this.matricula,
     this.color,
-    this.plazas,
+    this.asientosDisponibles,
+    this.observaciones,
     this.propietario,
     this.propietarioId,
+    this.propietarioNombre,
     this.activo = true,
   });
 
@@ -30,9 +34,11 @@ class Vehiculo {
       modelo: json['modelo'],
       matricula: json['matricula'],
       color: json['color'],
-      plazas: json['plazas'],
+      asientosDisponibles: json['asientosDisponibles'] ?? json['plazas'],
+      observaciones: json['observaciones'],
       propietario: json['propietario'] != null ? User.fromJson(json['propietario']) : null,
       propietarioId: json['propietarioId'],
+      propietarioNombre: json['propietarioNombre'],
       activo: json['activo'] ?? true,
     );
   }
@@ -43,11 +49,12 @@ class Vehiculo {
       'modelo': modelo,
       'matricula': matricula,
       'activo': activo,
+      'asientosDisponibles': asientosDisponibles,
     };
 
     if (id != null) data['id'] = id;
     if (color != null) data['color'] = color;
-    if (plazas != null) data['plazas'] = plazas;
+    if (observaciones != null) data['observaciones'] = observaciones;
     if (propietarioId != null) data['propietarioId'] = propietarioId;
 
     return data;
@@ -59,9 +66,11 @@ class Vehiculo {
     String? modelo,
     String? matricula,
     String? color,
-    int? plazas,
+    int? asientosDisponibles,
+    String? observaciones,
     User? propietario,
     int? propietarioId,
+    String? propietarioNombre,
     bool? activo,
   }) {
     return Vehiculo(
@@ -70,11 +79,20 @@ class Vehiculo {
       modelo: modelo ?? this.modelo,
       matricula: matricula ?? this.matricula,
       color: color ?? this.color,
-      plazas: plazas ?? this.plazas,
+      asientosDisponibles: asientosDisponibles ?? this.asientosDisponibles,
+      observaciones: observaciones ?? this.observaciones,
       propietario: propietario ?? this.propietario,
       propietarioId: propietarioId ?? this.propietarioId,
+      propietarioNombre: propietarioNombre ?? this.propietarioNombre,
       activo: activo ?? this.activo,
     );
+  }
+  
+  // Helper method to check if the current user is the owner
+  bool isOwner(int? currentUserId) {
+    return currentUserId != null && 
+           (propietarioId == currentUserId || 
+            (propietario != null && propietario!.id == currentUserId));
   }
   
   String get descripcion => '$marca $modelo ($matricula)';
@@ -82,7 +100,10 @@ class Vehiculo {
   String get descripcionCompleta {
     String desc = '$marca $modelo - $matricula';
     if (color != null) desc += ' - Color: $color';
-    if (plazas != null) desc += ' - $plazas plazas';
+    if (asientosDisponibles != null) desc += ' - $asientosDisponibles plazas';
+    if (observaciones != null && observaciones!.isNotEmpty) {
+      desc += '\nObservaciones: $observaciones';
+    }
     return desc;
   }
 }

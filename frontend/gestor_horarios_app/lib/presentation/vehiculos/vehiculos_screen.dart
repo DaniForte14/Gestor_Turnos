@@ -1,163 +1,595 @@
 import 'package:flutter/material.dart';
-import 'package:gestor_horarios_app/core/theme/app_theme.dart';
 import 'package:gestor_horarios_app/data/models/vehiculo.dart';
 import 'package:gestor_horarios_app/data/repositories/vehiculo_repository.dart';
+import 'package:gestor_horarios_app/data/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
 
 class VehiculosScreen extends StatefulWidget {
   const VehiculosScreen({Key? key}) : super(key: key);
 
   @override
-  _VehiculosScreenState createState() => _VehiculosScreenState();
+  VehiculosScreenState createState() => VehiculosScreenState();
 }
 
-class _VehiculosScreenState extends State<VehiculosScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  late Future<List<Vehiculo>> _misVehiculosFuture;
-  late Future<List<Vehiculo>> _vehiculosDisponiblesFuture;
+class VehiculosScreenState extends State<VehiculosScreen> {
+  // State variables
+  final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isSaving = false;
+  bool _isJoining = false;
+  bool _isLeaving = false;
+  Vehiculo? _miVehiculoCreado; // Vehículo creado por el usuario actual
+  List<Vehiculo> _vehiculosDisponibles = [];
+  final Map<int, int> _plazasOriginales = {};
+  final Map<int, bool> _usuarioEnVehiculo = {};
+
+  // Form controllers
+  final _marcaController = TextEditingController();
+  final _modeloController = TextEditingController();
+  final _matriculaController = TextEditingController();
+  final _colorController = TextEditingController();
+  final _plazasController = TextEditingController();
+  final _observacionesController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadVehiculos();
   }
 
+
+
   @override
   void dispose() {
-    _tabController.dispose();
+    _marcaController.dispose();
+    _modeloController.dispose();
+    _matriculaController.dispose();
+    _colorController.dispose();
+    _plazasController.dispose();
+    _observacionesController.dispose();
+    _plazasOriginales.clear();
     super.dispose();
   }
 
-  void _loadVehiculos() {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final vehiculoRepository = Provider.of<VehiculoRepository>(context, listen: false);
-    
-    _misVehiculosFuture = vehiculoRepository.getMisVehiculos();
-    _vehiculosDisponiblesFuture = vehiculoRepository.getVehiculosDisponibles();
-    
-    Future.wait([_misVehiculosFuture, _vehiculosDisponiblesFuture]).then((_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }).catchError((e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error cargando vehículos: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    });
+  // Helper methods for state management
+  void _setLoading(bool loading) {
+    if (mounted) {
+      setState(() => _isLoading = loading);
+    }
   }
 
-  void _cambiarEstadoActivo(Vehiculo vehiculo, bool nuevoEstado) async {
-    setState(() {
-      _isLoading = true;
-    });
+  void _setSaving(bool saving) {
+    if (mounted) {
+      setState(() => _isSaving = saving);
+    }
+  }
+
+  // Show confirmation dialog for vehicle deletion
+  Future<bool?> _mostrarDialogoConfirmacionEliminar(Vehiculo vehiculo) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Text('¿Estás seguro de que quieres eliminar el vehículo ${vehiculo.marca} ${vehiculo.modelo}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Delete vehicle with confirmation
+  Future<void> _eliminarVehiculo(Vehiculo vehiculo) async {
+    final confirm = await _mostrarDialogoConfirmacionEliminar(vehiculo);
+    if (confirm != true) return;
+
+    _setLoading(true);
+    try {
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      final success = await repository.eliminarVehiculo(vehiculo.id!);
+
+      if (!mounted) return;
+
+      if (success) {
+        _showSuccess('Vehículo eliminado correctamente');
+        await _loadVehiculos();
+      } else {
+        _showError('No se pudo eliminar el vehículo');
+      }
+    } catch (e) {
+      _showError('Error al eliminar el vehículo: ${e.toString()}');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Save new vehicle
+  Future<void> _guardarVehiculo() async {
+    if (!_formKey.currentState!.validate()) return;
+    _setSaving(true);
 
     try {
-      final vehiculoRepository = Provider.of<VehiculoRepository>(context, listen: false);
-      final success = await vehiculoRepository.cambiarEstadoActivo(vehiculo.id!, nuevoEstado);
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      
+      final asientosDisponibles = int.tryParse(_plazasController.text.trim()) ?? 0;
+      if (asientosDisponibles <= 0) {
+        _showError('El número de plazas debe ser mayor que cero');
+        return;
+      }
+      
+      final nuevoVehiculo = Vehiculo(
+        id: 0,
+        marca: _marcaController.text.trim(),
+        modelo: _modeloController.text.trim(),
+        matricula: _matriculaController.text.trim().toUpperCase(),
+        color: _colorController.text.trim().isNotEmpty ? _colorController.text.trim() : null,
+        asientosDisponibles: asientosDisponibles,
+        observaciones: _observacionesController.text.trim().isNotEmpty 
+            ? _observacionesController.text.trim() 
+            : null,
+        activo: true,
+      );
 
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Vehículo ${nuevoEstado ? 'activado' : 'desactivado'} correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _loadVehiculos();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al cambiar el estado del vehículo'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      try {
+        final response = await repository.crearVehiculo(nuevoVehiculo.toJson());
+        final vehiculoCreado = Vehiculo.fromJson(response);
+
+        if (!mounted) return;
+
+        if (vehiculoCreado != null) {
+          setState(() {
+            _miVehiculoCreado = vehiculoCreado;
+            _vehiculosDisponibles = [];
+          });
+          if (mounted) {
+            Navigator.of(context).pop();
+            _limpiarFormulario();
+            _showSuccess('Vehículo agregado correctamente');
+          }
+        } else {
+          _showError('No se pudo guardar el vehículo');
+        }
+      } catch (e) {
+        if (mounted) {
+          _showError('Error al conectar con el servidor: $e');
+        }
+      }
+    } catch (e) {
+      _showError('Error al guardar el vehículo: ${e.toString()}');
+    } finally {
+      _setSaving(false);
+    }
+  }
+
+  // Show error message
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  // Show success message
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  // Clear the vehicle form
+  void _limpiarFormulario() {
+    _marcaController.clear();
+    _modeloController.clear();
+    _matriculaController.clear();
+    _colorController.clear();
+    _plazasController.clear();
+    _observacionesController.clear();
+  }
+
+  // Unirse a un vehículo
+  Future<void> _unirseAVehiculo(Vehiculo vehiculo) async {
+    if (_isJoining || _isLeaving) return;
+    
+    setState(() => _isJoining = true);
+    
+    try {
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      final success = await repository.unirseAVehiculo(vehiculo.id!);
+      
+      if (!mounted) return;
+      
+      if (success) {
+        _showSuccess('¡Te has unido al vehículo exitosamente!');
+        await _loadVehiculos();
+      } else {
+        _showError('No se pudo unir al vehículo. Inténtalo de nuevo.');
+      }
+    } catch (e) {
+      _showError('Error al unirse al vehículo: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isJoining = false);
+      }
+    }
+  }
+  
+  // Salir de un vehículo
+  Future<void> _salirDeVehiculo(Vehiculo vehiculo) async {
+    if (_isJoining || _isLeaving) return;
+    
+    setState(() => _isLeaving = true);
+    
+    try {
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      final success = await repository.salirDeVehiculo(vehiculo.id!);
+      
+      if (!mounted) return;
+      
+      if (success) {
+        _showSuccess('Has salido del vehículo exitosamente');
+        await _loadVehiculos();
+      } else {
+        _showError('No se pudo salir del vehículo. Inténtalo de nuevo.');
+      }
+    } catch (e) {
+      _showError('Error al salir del vehículo: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLeaving = false);
+      }
+    }
+  }
+  
+  // Check if user is in any vehicle
+  Future<void> _verificarEstadoUsuarioEnVehiculos() async {
+    if (_vehiculosDisponibles.isEmpty) return;
+    
+    try {
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      
+      for (var vehiculo in _vehiculosDisponibles) {
+        if (vehiculo.id != null) {
+          final estaDentro = await repository.estaVehiculo(vehiculo.id!);
+          if (mounted) {
+            setState(() {
+              _usuarioEnVehiculo[vehiculo.id!] = estaDentro;
+            });
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        _showError('Error al verificar estado del usuario en vehículos: ${e.toString()}');
       }
     }
   }
 
-  void _eliminarVehiculo(Vehiculo vehiculo) async {
-    setState(() {
-      _isLoading = true;
-    });
+  // Load vehicles from repository
+  Future<void> _loadVehiculos() async {
+    if (!mounted) return;
+    _setLoading(true);
 
     try {
-      final vehiculoRepository = Provider.of<VehiculoRepository>(context, listen: false);
-      final success = await vehiculoRepository.eliminarVehiculo(vehiculo.id!);
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Get current user from auth provider
+      final currentUser = authProvider.currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          _showError('Usuario no autenticado');
+        }
+        return;
+      }
 
-      if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Vehículo eliminado correctamente'),
-            backgroundColor: Colors.green,
-          ),
+      // Load all vehicles
+      final allVehiculosData = await repository.obtenerVehiculos();
+      if (!mounted) return;
+
+      // Convert to Vehiculo objects
+      final allVehiculos = allVehiculosData.map((v) => Vehiculo.fromJson(v)).toList();
+      
+      // Find if current user has a vehicle
+      // First check if any vehicle has the current user as owner
+      Vehiculo? userVehiculo;
+      try {
+        userVehiculo = allVehiculos.firstWhere(
+          (v) => v.propietarioId == currentUser.id,
         );
-        _loadVehiculos();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al eliminar el vehículo'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      } catch (e) {
+        // No vehicle found for this user
+        userVehiculo = null;
+      }
+
+      setState(() {
+        _miVehiculoCreado = userVehiculo;
+        _vehiculosDisponibles = userVehiculo != null ? [] : allVehiculos;
+      });
+
+      // Verify user status in vehicles if there are available vehicles
+      if (_vehiculosDisponibles.isNotEmpty) {
+        await _verificarEstadoUsuarioEnVehiculos();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showError('Error cargando vehículos: ${e.toString()}');
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        _setLoading(false);
       }
     }
   }
 
+  // Delete user's vehicle
+  Future<void> _eliminarMiVehiculo() async {
+    if (_miVehiculoCreado == null) return;
+    
+    final confirm = await _mostrarDialogoConfirmacionEliminar(_miVehiculoCreado!);
+    if (confirm != true) return;
+    
+    _setLoading(true);
+    try {
+      final repository = Provider.of<VehiculoRepository>(context, listen: false);
+      final success = await repository.eliminarVehiculo(_miVehiculoCreado!.id!);
+
+      if (!mounted) return;
+
+      if (success) {
+        _showSuccess('Vehículo eliminado correctamente');
+        setState(() {
+          _miVehiculoCreado = null;
+        });
+        await _loadVehiculos();
+      } else {
+        _showError('No se pudo eliminar el vehículo');
+      }
+    } catch (e) {
+      _showError('Error al eliminar el vehículo: ${e.toString()}');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Build info row helper method
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  // Build user's vehicle view
+  Widget _buildMiVehiculoView() {
+    final currentUser = Provider.of<AuthProvider>(context, listen: false).currentUser;
+    
+    if (currentUser == null) {
+      return const Center(child: Text('No has iniciado sesión'));
+    }
+    
+    if (_miVehiculoCreado == null) {
+      return const Center(child: Text('No tienes ningún vehículo registrado'));
+    }
+    
+    final isOwner = _miVehiculoCreado!.isOwner(currentUser.id);
+        
+    return Card(
+      margin: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Mi Vehículo',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow('Marca', _miVehiculoCreado!.marca),
+            _buildInfoRow('Modelo', _miVehiculoCreado!.modelo),
+            _buildInfoRow('Matrícula', _miVehiculoCreado!.matricula),
+            if (_miVehiculoCreado!.color != null)
+              _buildInfoRow('Color', _miVehiculoCreado!.color!),
+            _buildInfoRow('Plazas disponibles', _miVehiculoCreado!.asientosDisponibles.toString()),
+            if (_miVehiculoCreado!.observaciones != null && _miVehiculoCreado!.observaciones!.isNotEmpty)
+              _buildInfoRow('Observaciones', _miVehiculoCreado!.observaciones!),
+            const SizedBox(height: 16),
+            if (isOwner)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      // Lógica para editar vehículo
+                    },
+                    child: const Text('Editar'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _eliminarMiVehiculo,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
+                    child: const Text('Eliminar'),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build vehicle item
+  Widget _buildVehiculoItem(Vehiculo vehiculo) {
+    final currentUser = Provider.of<AuthProvider>(context, listen: false).currentUser;
+    final isOwner = vehiculo.isOwner(currentUser?.id);
+    final estaEnEsteVehiculo = _usuarioEnVehiculo[vehiculo.id] ?? false;
+    final plazasDisponibles = vehiculo.asientosDisponibles ?? 0;
+    
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListTile(
+        title: Text('${vehiculo.marca} ${vehiculo.modelo}'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Matrícula: ${vehiculo.matricula}'),
+            if (vehiculo.color != null) Text('Color: ${vehiculo.color}'),
+            Text('Plazas disponibles: ${plazasDisponibles}'),
+            if (vehiculo.propietarioNombre != null) 
+              Text('Propietario: ${vehiculo.propietarioNombre}'),
+          ],
+        ),
+        trailing: isOwner
+            ? IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _eliminarVehiculo(vehiculo),
+              )
+            : _isJoining || _isLeaving
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: plazasDisponibles <= 0 && !estaEnEsteVehiculo
+                        ? null
+                        : () => estaEnEsteVehiculo
+                            ? _salirDeVehiculo(vehiculo)
+                            : _unirseAVehiculo(vehiculo),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: estaEnEsteVehiculo ? Colors.orange : Theme.of(context).primaryColor,
+                    ),
+                    child: Text(estaEnEsteVehiculo ? 'Salir' : 'Unirse'),
+                  ),
+      ),
+    );
+  }
+
+  // Build list of available vehicles
+  Widget _buildListaVehiculos() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Text(
+            'Vehículos disponibles',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+        if (_vehiculosDisponibles.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Center(child: Text('No hay vehículos disponibles')),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _vehiculosDisponibles.length,
+            itemBuilder: (context, index) {
+              return _buildVehiculoItem(_vehiculosDisponibles[index]);
+            },
+          ),
+      ],
+    );
+  }
+
+  // Show add vehicle dialog
   void _showAgregarVehiculoDialog() {
-    // Aquí implementaremos la funcionalidad para añadir un nuevo vehículo
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Agregar Vehículo'),
-        content: const Text('Esta funcionalidad estará disponible próximamente.'),
+        title: const Text('Agregar vehículo'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _marcaController,
+                  decoration: const InputDecoration(labelText: 'Marca'),
+                  validator: (value) =>
+                      value?.isEmpty ?? true ? 'La marca es obligatoria' : null,
+                ),
+                TextFormField(
+                  controller: _modeloController,
+                  decoration: const InputDecoration(labelText: 'Modelo'),
+                  validator: (value) =>
+                      value?.isEmpty ?? true ? 'El modelo es obligatorio' : null,
+                ),
+                TextFormField(
+                  controller: _matriculaController,
+                  decoration: const InputDecoration(labelText: 'Matrícula'),
+                  validator: (value) =>
+                      value?.isEmpty ?? true ? 'La matrícula es obligatoria' : null,
+                ),
+                TextFormField(
+                  controller: _colorController,
+                  decoration: const InputDecoration(labelText: 'Color (opcional)'),
+                ),
+                TextFormField(
+                  controller: _plazasController,
+                  decoration: const InputDecoration(labelText: 'Plazas disponibles'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value?.isEmpty ?? true) {
+                      return 'El número de plazas es obligatorio';
+                    }
+                    final plazas = int.tryParse(value!);
+                    if (plazas == null || plazas <= 0) {
+                      return 'Debe ser un número mayor que cero';
+                    }
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: _observacionesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Observaciones (opcional)',
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('CERRAR'),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: _isSaving ? null : _guardarVehiculo,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Guardar'),
           ),
         ],
       ),
@@ -168,336 +600,19 @@ class _VehiculosScreenState extends State<VehiculosScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vehículos'),
-        automaticallyImplyLeading: false,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Mis Vehículos'),
-            Tab(text: 'Disponibles'),
-          ],
-        ),
+        title: const Text('Mis Vehículos'),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMisVehiculosTab(),
-          _buildVehiculosDisponiblesTab(),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAgregarVehiculoDialog,
-        child: const Icon(Icons.add),
-        tooltip: 'Agregar Vehículo',
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _miVehiculoCreado != null
+              ? _buildMiVehiculoView()
+              : _buildListaVehiculos(),
+      floatingActionButton: _miVehiculoCreado == null
+          ? FloatingActionButton(
+              onPressed: _showAgregarVehiculoDialog,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
-  }
-
-  Widget _buildMisVehiculosTab() {
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : FutureBuilder<List<Vehiculo>>(
-            future: _misVehiculosFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text(
-                    'Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                );
-              }
-              
-              final vehiculos = snapshot.data ?? [];
-              
-              if (vehiculos.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.directions_car,
-                        size: 80,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No tienes vehículos registrados',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: _showAgregarVehiculoDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Agregar Vehículo'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              
-              return ListView.builder(
-                itemCount: vehiculos.length,
-                padding: const EdgeInsets.all(16),
-                itemBuilder: (context, index) {
-                  final vehiculo = vehiculos[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    elevation: 2,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: CircleAvatar(
-                        backgroundColor: vehiculo.activo ? AppTheme.primaryColor : Colors.grey,
-                        child: const Icon(
-                          Icons.directions_car,
-                          color: Colors.white,
-                        ),
-                      ),
-                      title: Text(
-                        vehiculo.descripcion,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(
-                                vehiculo.activo ? Icons.check_circle : Icons.cancel,
-                                color: vehiculo.activo ? Colors.green : Colors.red,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                vehiculo.activo ? 'Activo' : 'Inactivo',
-                                style: TextStyle(
-                                  color: vehiculo.activo ? Colors.green : Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (vehiculo.color != null) ...[
-                            const SizedBox(height: 4),
-                            Text('Color: ${vehiculo.color}'),
-                          ],
-                          if (vehiculo.plazas != null) ...[
-                            const SizedBox(height: 4),
-                            Text('Plazas: ${vehiculo.plazas}'),
-                          ],
-                        ],
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'edit':
-                              // Implementar edición de vehículo
-                              break;
-                            case 'toggle':
-                              _cambiarEstadoActivo(vehiculo, !vehiculo.activo);
-                              break;
-                            case 'delete':
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Eliminar Vehículo'),
-                                  content: const Text(
-                                      '¿Está seguro de que desea eliminar este vehículo?'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.of(context).pop(),
-                                      child: const Text('CANCELAR'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.of(context).pop();
-                                        _eliminarVehiculo(vehiculo);
-                                      },
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                      ),
-                                      child: const Text('ELIMINAR'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem<String>(
-                            value: 'edit',
-                            child: ListTile(
-                              leading: Icon(Icons.edit),
-                              title: Text('Editar'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          PopupMenuItem<String>(
-                            value: 'toggle',
-                            child: ListTile(
-                              leading: Icon(
-                                vehiculo.activo ? Icons.cancel : Icons.check_circle,
-                                color: vehiculo.activo ? Colors.red : Colors.green,
-                              ),
-                              title: Text(vehiculo.activo ? 'Desactivar' : 'Activar'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          const PopupMenuItem<String>(
-                            value: 'delete',
-                            child: ListTile(
-                              leading: Icon(Icons.delete, color: Colors.red),
-                              title: Text('Eliminar', style: TextStyle(color: Colors.red)),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-  }
-
-  Widget _buildVehiculosDisponiblesTab() {
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : FutureBuilder<List<Vehiculo>>(
-            future: _vehiculosDisponiblesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text(
-                    'Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                );
-              }
-              
-              final vehiculos = snapshot.data ?? [];
-              
-              if (vehiculos.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.no_crash,
-                        size: 80,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No hay vehículos disponibles',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              
-              return ListView.builder(
-                itemCount: vehiculos.length,
-                padding: const EdgeInsets.all(16),
-                itemBuilder: (context, index) {
-                  final vehiculo = vehiculos[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    elevation: 2,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: CircleAvatar(
-                        backgroundColor: AppTheme.primaryColor,
-                        child: const Icon(
-                          Icons.directions_car,
-                          color: Colors.white,
-                        ),
-                      ),
-                      title: Text(
-                        vehiculo.descripcion,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          if (vehiculo.propietario != null) ...[
-                            Text('Propietario: ${vehiculo.propietario!.nombreCompleto}'),
-                            const SizedBox(height: 4),
-                          ],
-                          if (vehiculo.color != null) ...[
-                            Text('Color: ${vehiculo.color}'),
-                            const SizedBox(height: 4),
-                          ],
-                          if (vehiculo.plazas != null) ...[
-                            Text('Plazas: ${vehiculo.plazas}'),
-                          ],
-                        ],
-                      ),
-                      trailing: const Icon(Icons.info_outline),
-                      onTap: () {
-                        // Mostrar detalles del vehículo
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text(vehiculo.descripcion),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Matrícula: ${vehiculo.matricula}'),
-                                const SizedBox(height: 8),
-                                if (vehiculo.propietario != null) ...[
-                                  Text('Propietario: ${vehiculo.propietario!.nombreCompleto}'),
-                                  const SizedBox(height: 8),
-                                ],
-                                if (vehiculo.color != null) ...[
-                                  Text('Color: ${vehiculo.color}'),
-                                  const SizedBox(height: 8),
-                                ],
-                                if (vehiculo.plazas != null) ...[
-                                  Text('Plazas: ${vehiculo.plazas}'),
-                                ],
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('CERRAR'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              );
-            },
-          );
   }
 }

@@ -5,10 +5,12 @@ import 'package:provider/provider.dart';
 
 class HorariosDisponiblesScreen extends StatefulWidget {
   final DateTime selectedDate;
+  final String? userRole;
 
   const HorariosDisponiblesScreen({
     Key? key,
     required this.selectedDate,
+    this.userRole,
   }) : super(key: key);
 
   @override
@@ -38,6 +40,7 @@ class _HorariosDisponiblesScreenState extends State<HorariosDisponiblesScreen> {
           Provider.of<HorarioRepository>(context, listen: false);
       final horarios = await horarioRepository.getHorariosDisponibles(
         fecha: widget.selectedDate,
+        rol: widget.userRole,
       );
 
       setState(() {

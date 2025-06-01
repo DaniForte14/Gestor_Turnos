@@ -11,38 +11,77 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface HorarioRepository extends JpaRepository<Horario, Long> {
+    // Basic CRUD operations
+    @Override
+    Optional<Horario> findById(Long id);
+    
+    // User-specific queries
     List<Horario> findByUsuario(User usuario);
     List<Horario> findByUsuarioAndFechaBetween(User usuario, LocalDate fechaInicio, LocalDate fechaFin);
+    List<Horario> findByUsuarioAndDisponibleFalse(User usuario);
+    List<Horario> findByUsuarioAndFecha(User usuario, LocalDate fecha);
+    List<Horario> findByUsuarioAndFechaGreaterThanEqual(User usuario, LocalDate fecha);
+    
+    // Availability queries
+    List<Horario> findByDisponibleTrue();
     List<Horario> findByDisponibleTrueAndUsuarioNot(User usuario);
     List<Horario> findByDisponibleTrueAndUsuarioNotAndFechaBetween(
             User usuario, LocalDate fechaInicio, LocalDate fechaFin);
-    List<Horario> findByUsuarioAndDisponibleFalse(User usuario);
-    
-    // Nuevos métodos para consultas adicionales
-    List<Horario> findByFecha(LocalDate fecha);
-    List<Horario> findByFechaBetween(LocalDate fechaInicio, LocalDate fechaFin);
-    List<Horario> findByUsuarioAndFecha(User usuario, LocalDate fecha);
-    
-    // Consultas para horarios por tipo de turno
-    List<Horario> findByUsuarioAndTipoTurno(User usuario, Horario.TipoTurno tipoTurno);
-    List<Horario> findByTipoTurno(Horario.TipoTurno tipoTurno);
-    
-    // Consulta para horarios que se solapan en una fecha y rango de horas
-    @Query("SELECT h FROM Horario h WHERE h.usuario = ?1 AND h.fecha = ?2 AND " +
-           "((h.horaInicio <= ?3 AND h.horaFin > ?3) OR (h.horaInicio < ?4 AND h.horaFin >= ?4) OR " +
-           "(h.horaInicio >= ?3 AND h.horaFin <= ?4))")
-    List<Horario> findOverlappingSchedules(User usuario, LocalDate fecha, LocalTime horaInicio, LocalTime horaFin);
-    
-    // Consulta para encontrar los horarios disponibles en una fecha específica
     List<Horario> findByFechaAndDisponibleTrue(LocalDate fecha);
     
-    // Consulta para encontrar horarios de un usuario a partir de una fecha
-    List<Horario> findByUsuarioAndFechaGreaterThanEqual(User usuario, LocalDate fecha);
+    // Date-based queries
+    List<Horario> findByFecha(LocalDate fecha);
+    List<Horario> findByFechaBetween(LocalDate fechaInicio, LocalDate fechaFin);
+    List<Horario> findByFechaBetweenAndDisponibleTrue(LocalDate fechaInicio, LocalDate fechaFin);
     
-    // Encontrar horarios disponibles por rol y fecha
-    @Query("SELECT h FROM Horario h JOIN h.usuario u JOIN u.roles r WHERE h.disponible = true AND (r = :rol OR r = com.gestorhorarios.model.Role.ROLE_USER) AND h.fecha = :fecha")
+    // Shift type queries
+    List<Horario> findByUsuarioAndTipoTurno(User usuario, Horario.TipoTurno tipoTurno);
+    List<Horario> findByTipoTurno(Horario.TipoTurno tipoTurno);
+    List<Horario> findByTipoTurnoAndFechaBetween(Horario.TipoTurno tipoTurno, LocalDate fechaInicio, LocalDate fechaFin);
+    
+    // Role-based queries
+    @Query("SELECT h FROM Horario h JOIN h.usuario u WHERE h.disponible = true AND " +
+           "(:rol MEMBER OF u.roles OR com.gestorhorarios.model.Role.ROLE_USER MEMBER OF u.roles) AND " +
+           "h.fecha = :fecha")
     List<Horario> findAvailableByRolAndFecha(@Param("rol") Role rol, @Param("fecha") LocalDate fecha);
+    
+    @Query("SELECT h FROM Horario h JOIN h.usuario u WHERE h.disponible = true AND " +
+           "(:rol MEMBER OF u.roles OR com.gestorhorarios.model.Role.ROLE_USER MEMBER OF u.roles) AND " +
+           "h.fecha BETWEEN :startDate AND :endDate")
+    List<Horario> findAvailableByRolAndFechaBetween(
+            @Param("rol") Role rol, 
+            @Param("startDate") LocalDate startDate, 
+            @Param("endDate") LocalDate endDate);
+    
+    // Schedule conflict detection
+    @Query("SELECT h FROM Horario h WHERE h.usuario = :usuario AND h.fecha = :fecha AND " +
+           "((h.horaInicio <= :horaInicio AND h.horaFin > :horaInicio) OR " +
+           "(h.horaInicio < :horaFin AND h.horaFin >= :horaFin) OR " +
+           "(h.horaInicio >= :horaInicio AND h.horaFin <= :horaFin))")
+    List<Horario> findConflictingSchedules(
+            @Param("usuario") User usuario,
+            @Param("fecha") LocalDate fecha,
+            @Param("horaInicio") LocalTime horaInicio,
+            @Param("horaFin") LocalTime horaFin);
+    
+    // Find by user, date range and role
+    @Query("SELECT h FROM Horario h JOIN h.usuario u WHERE h.usuario = :usuario AND " +
+           "h.fecha BETWEEN :startDate AND :endDate AND " +
+           ":rol MEMBER OF u.roles")
+    List<Horario> findByUsuarioAndFechaBetweenAndRol(
+            @Param("usuario") User usuario,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("rol") Role rol);
+    
+    // Find count of schedules by user and date range
+    @Query("SELECT COUNT(h) FROM Horario h WHERE h.usuario = :usuario AND h.fecha BETWEEN :startDate AND :endDate")
+    Long countByUsuarioAndFechaBetween(
+            @Param("usuario") User usuario,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
 }

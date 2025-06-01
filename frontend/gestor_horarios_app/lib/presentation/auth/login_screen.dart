@@ -42,19 +42,29 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           if (response['success'] == true) {
             // Navegar a la pantalla correspondiente según el tipo de usuario
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => response['isAdmin'] == true
-                    ? const AdminDashboard()
-                    : const HomeScreen(),
-              ),
-            );
+            if (response['isAdmin'] == true) {
+              // Navegar al panel de administración
+              if (!mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const AdminDashboard()),
+                (route) => false, // Elimina todas las rutas anteriores
+              );
+            } else {
+              // Navegar a la pantalla principal para usuarios normales
+              if (!mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+                (route) => false, // Elimina todas las rutas anteriores
+              );
+            }
           } else {
             // Mostrar mensaje de error
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(response['message'] ?? 'Error de inicio de sesión. Verifique sus credenciales.'),
                 backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
               ),
             );
           }

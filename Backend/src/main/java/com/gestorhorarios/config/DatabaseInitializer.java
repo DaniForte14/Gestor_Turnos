@@ -12,13 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Random;
-import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Configuration
 public class DatabaseInitializer {
+    
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseInitializer.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -27,7 +28,7 @@ public class DatabaseInitializer {
     private HorarioRepository horarioRepository;
 
     @Autowired
-    private VehiculoRepository vehiculoRepository;
+    private VehicleRepository vehicleRepository;
 
     @Autowired
     private SolicitudCambioRepository solicitudCambioRepository;
@@ -47,19 +48,26 @@ public class DatabaseInitializer {
                 
                 // Crear usuarios
                 User admin = createUser("admin", "Admin", "Administrador", "admin@gestor.com", "Centro Principal", "Madrid", Role.ROLE_ADMIN);
-                User supervisor = createUser("supervisor", "Supervisor", "Gestor", "supervisor@gestor.com", "Centro Norte", "Barcelona", Role.ROLE_SUPERVISOR);
-                User empleado1 = createUser("empleado1", "Juan", "García", "juan@gestor.com", "Centro Este", "Valencia", Role.ROLE_USER);
-                User empleado2 = createUser("empleado2", "María", "López", "maria@gestor.com", "Centro Oeste", "Sevilla", Role.ROLE_USER);
-                User empleado3 = createUser("empleado3", "Carlos", "Martínez", "carlos@gestor.com", "Centro Sur", "Málaga", Role.ROLE_USER);
+                // Using ROLE_ENFERMERO as a supervisor role since ROLE_SUPERVISOR doesn't exist
+                User enfermero = createUser("enfermero1", "Ana", "Martínez", "ana@gestor.com", "Centro Norte", "Barcelona", Role.ROLE_ENFERMERO);
+                User medico1 = createUser("medico1", "Juan", "García", "juan@gestor.com", "Centro Este", "Valencia", Role.ROLE_MEDICO);
+                User enfermero2 = createUser("enfermero2", "María", "López", "maria@gestor.com", "Centro Oeste", "Sevilla", Role.ROLE_ENFERMERO);
+                User auxiliar = createUser("auxiliar1", "Carlos", "Martínez", "carlos@gestor.com", "Centro Sur", "Málaga", Role.ROLE_AUXILIAR);
                 
-                System.out.println("Usuarios creados: " + admin.getUsername() + ", " + supervisor.getUsername() + ", " 
-                    + empleado1.getUsername() + ", " + empleado2.getUsername() + ", " + empleado3.getUsername());
+                System.out.println("Usuarios creados: " + admin.getUsername() + ", " + enfermero.getUsername() + ", " 
+                    + medico1.getUsername() + ", " + enfermero2.getUsername() + ", " + auxiliar.getUsername());
                 
                 // Crear vehículos
-                createVehiculo("Renault", "Clio", "1234ABC", "Rojo", 5, empleado1);
-                createVehiculo("Seat", "Ibiza", "5678DEF", "Azul", 5, empleado2);
-                createVehiculo("Toyota", "Corolla", "9012GHI", "Blanco", 5, empleado3);
-                createVehiculo("Ford", "Focus", "3456JKL", "Negro", 5, supervisor);
+                Vehicle vehicle1 = createVehicle("Renault", "Clio", "1234ABC", 5, medico1);
+                Vehicle vehicle2 = createVehicle("Seat", "Ibiza", "5678DEF", 5, enfermero);
+                Vehicle vehicle3 = createVehicle("Toyota", "Corolla", "9012GHI", 5, enfermero2);
+                Vehicle vehicle4 = createVehicle("Ford", "Focus", "3456JKL", 5, auxiliar);
+                
+                // Añadir pasajeros a los vehículos
+                addPassenger(vehicle1, enfermero);
+                addPassenger(vehicle2, medico1);
+                addPassenger(vehicle3, auxiliar);
+                addPassenger(vehicle4, enfermero2);
                 
                 // Crear horarios para el mes actual y el siguiente
                 LocalDate hoy = LocalDate.now();
@@ -67,14 +75,15 @@ public class DatabaseInitializer {
                 LocalDate finDelMesSiguiente = hoy.plusMonths(1).withDayOfMonth(hoy.plusMonths(1).lengthOfMonth());
                 
                 // Crear horarios para cada empleado
-                createHorariosEmpleado(empleado1, inicioDeMes, finDelMesSiguiente);
-                createHorariosEmpleado(empleado2, inicioDeMes, finDelMesSiguiente);
-                createHorariosEmpleado(empleado3, inicioDeMes, finDelMesSiguiente);
+                createHorariosEmpleado(medico1, inicioDeMes, finDelMesSiguiente);
+                createHorariosEmpleado(enfermero, inicioDeMes, finDelMesSiguiente);
+                createHorariosEmpleado(enfermero2, inicioDeMes, finDelMesSiguiente);
+                createHorariosEmpleado(auxiliar, inicioDeMes, finDelMesSiguiente);
                 
                 // Crear algunas solicitudes de cambio
-                createSolicitudCambio(empleado1, empleado2, "¿Podrías cambiarme el turno?");
-                createSolicitudCambio(empleado2, empleado3, "Necesito cambiar este turno, ¿te viene bien?");
-                createSolicitudCambio(empleado3, empleado1, "¿Me cambias el turno por favor?");
+                createSolicitudCambio(medico1, enfermero, "¿Podrías cambiarme el turno?");
+                createSolicitudCambio(enfermero, enfermero2, "Necesito cambiar este turno, ¿te viene bien?");
+                createSolicitudCambio(enfermero2, auxiliar, "¿Me cambias el turno por favor?");
                 
                 System.out.println("Base de datos inicializada correctamente.");
             } else {
@@ -94,27 +103,47 @@ public class DatabaseInitializer {
         user.setCentroTrabajo(centroTrabajo);
         user.setLocalidad(localidad);
         
-        Set<Role> roleSet = new HashSet<>(Arrays.asList(roles));
-        user.setRoles(roleSet);
+        // Set the first role (we're only using one role per user now)
+        user.setRole(roles.length > 0 ? roles[0] : Role.ROLE_USER);
         
-        // Codificar la contraseña
+        // Set default password
         user.setPassword(passwordEncoder.encode("password"));
+        
+        // Set timestamps
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
         
         return userRepository.save(user);
     }
     
-    private Vehiculo createVehiculo(String marca, String modelo, String matricula, String color, 
-                                  Integer plazas, User propietario) {
-        Vehiculo vehiculo = new Vehiculo();
-        vehiculo.setMarca(marca);
-        vehiculo.setModelo(modelo);
-        vehiculo.setMatricula(matricula);
-        vehiculo.setColor(color);
-        vehiculo.setAsientosDisponibles(plazas);
-        vehiculo.setPropietario(propietario);
-        vehiculo.setActivo(true);
+    private Vehicle createVehicle(String brand, String model, String licensePlate, 
+                               Integer seats, User owner) {
+        Vehicle vehicle = new Vehicle();
+        vehicle.setBrand(brand);
+        vehicle.setModel(model);
+        vehicle.setLicensePlate(licensePlate);
+        vehicle.setAvailableSeats(seats);
+        vehicle.setOwner(owner);
+        vehicle.setActive(true);
+        vehicle.setTotalSeats(seats);
+        vehicle.setObservations("Vehicle created by database initializer");
         
-        return vehiculoRepository.save(vehiculo);
+        return vehicleRepository.save(vehicle);
+    }
+    
+    private void addPassenger(Vehicle vehicle, User user) {
+        // Use the helper method to add the passenger
+        boolean added = vehicle.añadirPasajero(user);
+        
+        if (added) {
+            // Save both entities to ensure the relationship is persisted
+            vehicleRepository.save(vehicle);
+            userRepository.save(user);
+            
+            logger.info("Added user {} as passenger to vehicle {}", user.getId(), vehicle.getId());
+        } else {
+            logger.warn("Failed to add user {} as passenger to vehicle {}", user.getId(), vehicle.getId());
+        }
     }
     
     private void createHorariosEmpleado(User empleado, LocalDate fechaInicio, LocalDate fechaFin) {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gestor_horarios_app/core/constants/api_constants.dart';
 
 class ApiService {
@@ -8,25 +9,51 @@ class ApiService {
   static const String baseUrl = ApiConstants.baseUrl;
 
   // Get headers for API requests
-  Future<Map<String, String>> _getHeaders() async {
-    return {
+  Future<Map<String, String>> _getHeaders({bool requiresAuth = true}) async {
+    final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+
+    if (requiresAuth) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('auth_token');
+        
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+          debugPrint('Añadido token de autorización a la cabecera');
+        } else {
+          debugPrint('No se encontró token de autenticación para la solicitud');
+        }
+      } catch (e) {
+        debugPrint('Error al obtener token de autenticación: $e');
+      }
+    }
+
+    debugPrint('Cabeceras de la solicitud: $headers');
+    return headers;
   }
 
-  // Make a GET request with optional query parameters
+  // Make a GET request with optional query parameters and authentication
   Future<dynamic> get(
     String endpoint, {
     Map<String, dynamic>? queryParams,
+    bool requiresAuth = true,
   }) async {
     try {
-      final headers = await _getHeaders();
+      final headers = await _getHeaders(requiresAuth: requiresAuth);
       final uri = Uri.parse('$baseUrl/$endpoint').replace(
         queryParameters: queryParams,
       );
       
       debugPrint('GET: $uri');
+      
+      // If auth is required but no token is available, throw an exception
+      if (requiresAuth && !headers.containsKey('Authorization')) {
+        throw Exception('Authentication required');
+      }
+      
       final response = await http.get(
         uri,
         headers: headers,

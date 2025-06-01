@@ -5,6 +5,7 @@ class User {
   final String nombre;
   final String apellidos;
   final List<String> roles;
+  final bool isAdmin;
 
   User({
     required this.id,
@@ -13,7 +14,8 @@ class User {
     required this.nombre,
     required this.apellidos,
     this.roles = const ['USER'],
-  });
+    bool? isAdmin,
+  }) : isAdmin = isAdmin ?? (roles.any((role) => role.toUpperCase() == 'ROLE_ADMIN'));
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -23,6 +25,7 @@ class User {
       nombre: json['nombre'] ?? '',
       apellidos: json['apellidos'] ?? '',
       roles: List<String>.from(json['roles'] ?? ['USER']),
+      isAdmin: json['isAdmin'] ?? json['roles']?.contains('ROLE_ADMIN') ?? false,
     );
   }
 
@@ -48,6 +51,7 @@ class User {
     String? nombre,
     String? apellidos,
     List<String>? roles,
+    bool? isAdmin,
   }) {
     return User(
       id: id ?? this.id,
@@ -56,11 +60,12 @@ class User {
       nombre: nombre ?? this.nombre,
       apellidos: apellidos ?? this.apellidos,
       roles: roles ?? this.roles,
+      isAdmin: isAdmin ?? this.isAdmin,
     );
   }
 
   @override
   String toString() {
-    return 'User(id: $id, username: $username, email: $email, nombre: $nombre, apellidos: $apellidos)';
+    return 'User(id: $id, username: $username, email: $email, nombre: $nombre, apellidos: $apellidos, roles: $roles, isAdmin: $isAdmin)';
   }
 }

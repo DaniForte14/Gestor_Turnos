@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gestor_horarios_app/data/repositories/auth_repository.dart';
 import 'package:gestor_horarios_app/presentation/admin/schedule_form_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gestor_horarios_app/presentation/auth/login_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -44,6 +46,51 @@ class _AdminDashboardState extends State<AdminDashboard> {
         final userData = snapshot.data!;
         
         return Scaffold(
+          appBar: AppBar(
+            title: const Text('Panel de Administración'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout),
+                tooltip: 'Cerrar sesión',
+                onPressed: () async {
+                  // Mostrar diálogo de confirmación
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Cerrar sesión'),
+                      content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: const Text('Cerrar sesión'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (shouldLogout == true) {
+                    // Limpiar el token de autenticación
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.remove('auth_token');
+                    
+                    // Navegar a la pantalla de login
+                    if (mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                        (route) => false,
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(

@@ -1,0 +1,543 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
+import 'package:gestor_horarios_app/data/models/schedule_model.dart';
+import 'package:gestor_horarios_app/data/repositories/schedule_repository.dart';
+import 'package:gestor_horarios_app/data/providers/auth_provider.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
+
+// Extension to handle date comparison
+extension DateOnlyCompare on DateTime {
+  bool isSameDate(DateTime other) {
+    return year == other.year && month == other.month && day == other.day;
+  }
+}
+
+// Helper function to format role names
+String _formatRole(String role) {
+  switch (role.toUpperCase()) {
+    case 'MEDICO':
+      return 'Médico';
+    case 'ENFERMERO':
+      return 'Enfermero/a';
+    case 'TCAE':
+      return 'Técnico en Cuidados de Enfermería';
+    default:
+      return role;
+  }
+}
+
+class MyShiftsScreen extends StatefulWidget {
+  const MyShiftsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<MyShiftsScreen> createState() => _MyShiftsScreenState();
+}
+
+class _MyShiftsScreenState extends State<MyShiftsScreen> with SingleTickerProviderStateMixin {
+  // State variables
+  final ScheduleRepository _scheduleRepository = ScheduleRepository();
+  final List<Schedule> _shifts = [];
+  bool _isLoading = true;
+  bool _isRefreshing = false;
+  String? _errorMessage;
+  late TabController _tabController;
+  
+  // Filters
+  String _selectedFilter = 'all'; // 'all', 'upcoming', 'past'
+  String _selectedRole = 'all'; // 'all', 'MEDICO', 'ENFERMERO', 'TCAE'
+  
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadShifts();
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadShifts({bool showLoading = true}) async {
+    if (!mounted) return;
+
+    setState(() {
+      if (showLoading) _isLoading = true;
+      _isRefreshing = !showLoading;
+      _errorMessage = null;
+    });
+
+    try {
+      debugPrint('🔍 Cargando turnos...');
+      final shifts = await _scheduleRepository.getSchedules();
+      if (!mounted) return;
+      
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.currentUser?.id;
+      
+      debugPrint('👤 Usuario actual ID: $currentUserId');
+      debugPrint('📋 Total de turnos cargados: ${shifts.length}');
+      
+      if (!mounted) return;
+      
+      final now = DateTime.now();
+      
+      setState(() {
+        _shifts.clear();
+        _shifts.addAll(shifts.where((shift) {
+          if (shift.assignedTo != currentUserId) return false;
+          
+          final isUpcoming = shift.date.isAfter(now) || 
+                         (shift.date.year == now.year && 
+                          shift.date.month == now.month && 
+                          shift.date.day == now.day);
+          
+          if (_selectedFilter == 'upcoming' && !isUpcoming) return false;
+          if (_selectedFilter == 'past' && isUpcoming) return false;
+          if (_selectedRole != 'all' && shift.role != _selectedRole) return false;
+          
+          return true;
+        }));
+        
+        _shifts.sort((a, b) => a.date.compareTo(b.date));
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+    } catch (e, stackTrace) {
+      debugPrint('Error loading shifts: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _errorMessage = 'Error al cargar los turnos. Inténtalo de nuevo.';
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<bool?> _showDeleteConfirmation(String shiftId) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar turno'),
+        content: const Text('¿Estás seguro de que deseas eliminar este turno?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteShift(String shiftId) async {
+    // Mostrar diálogo de confirmación
+    final confirmed = await _showDeleteConfirmation(shiftId);
+    if (confirmed != true) {
+      debugPrint('❌ Usuario canceló la eliminación del turno');
+      return;
+    }
+
+    // Mostrar indicador de carga
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white)),
+              SizedBox(width: 16),
+              Text('Eliminando turno...'),
+            ],
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+
+    try {
+      debugPrint('🔄 Iniciando eliminación del turno: $shiftId');
+      await _scheduleRepository.deleteSchedule(shiftId);
+      
+      if (!mounted) return;
+      
+      // Recargar la lista de turnos
+      await _loadShifts(showLoading: false);
+      
+      if (mounted) {
+        // Cerrar el snackbar de carga
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        
+        // Mostrar mensaje de éxito
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Turno eliminado correctamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al eliminar turno: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        // Cerrar el snackbar de carga
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        
+        // Mostrar mensaje de error
+        String errorMessage = 'Error al eliminar el turno';
+        if (e is DioError) {
+          if (e.response?.statusCode == 404) {
+            errorMessage = 'El turno no existe o ya ha sido eliminado';
+          } else if (e.response?.statusCode == 403) {
+            errorMessage = 'No tienes permiso para eliminar este turno';
+          } else {
+            errorMessage = 'Error de red: ${e.message}';
+          }
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ $errorMessage'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Reintentar',
+              textColor: Colors.white,
+              onPressed: () => _deleteShift(shiftId),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildShiftCard(Schedule shift) {
+    final now = DateTime.now();
+    final isPast = shift.date.isBefore(DateTime(now.year, now.month, now.day));
+    
+    Color statusColor;
+    String statusText;
+    
+    switch (shift.status.toUpperCase()) {
+      case 'PENDING':
+        statusColor = Colors.orange;
+        statusText = 'Pendiente';
+        break;
+      case 'APPROVED':
+        statusColor = Colors.green;
+        statusText = 'Aprobado';
+        break;
+      case 'REJECTED':
+        statusColor = Colors.red;
+        statusText = 'Rechazado';
+        break;
+      case 'EXCHANGED':
+        statusColor = Colors.blue;
+        statusText = 'Intercambiado';
+        break;
+      case 'AVAILABLE':
+      case 'COMPLETED':
+      default:
+        statusColor = isPast ? Colors.grey : Colors.blue;
+        statusText = isPast ? 'Completado' : 'Disponible';
+    }
+
+    final dateFormat = DateFormat('EEEE d MMMM', 'es_ES');
+    final formattedDate = '${dateFormat.format(shift.date).capitalizeFirst()}, ${shift.startTime} - ${shift.endTime}';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16.0),
+        leading: _buildRoleIcon(shift.role),
+        title: Text(
+          _formatRole(shift.role),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4.0),
+            Text(
+              formattedDate,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 4.0),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+              child: Text(
+                statusText,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12.0,
+                ),
+              ),
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Botón de eliminar siempre visible
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: () => _deleteShift(shift.id),
+              tooltip: 'Eliminar turno',
+            ),
+            const SizedBox(width: 4.0),
+            // Menú de opciones adicionales
+            IconButton(
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => _showShiftOptions(shift, isPast),
+              tooltip: 'Más opciones',
+            ),
+          ],
+        ),
+        onTap: () {
+          // TODO: Implement shift details navigation
+        },
+      ),
+    );
+  }
+
+  Widget _buildRoleIcon(String role) {
+    IconData iconData;
+    Color color;
+    
+    switch (role.toUpperCase()) {
+      case 'MEDICO':
+        iconData = Icons.medical_services;
+        color = Colors.blue;
+        break;
+      case 'ENFERMERO':
+        iconData = Icons.medical_services_outlined;
+        color = Colors.green;
+        break;
+      case 'TCAE':
+        iconData = Icons.medical_services_rounded;
+        color = Colors.purple;
+        break;
+      default:
+        iconData = Icons.person;
+        color = Colors.grey;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(iconData, color: color, size: 24.0),
+    );
+  }
+
+  void _showShiftOptions(Schedule shift, bool isPast) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isPast && shift.status != 'EXCHANGED')
+              ListTile(
+                leading: const Icon(Icons.swap_horiz, color: Colors.blue),
+                title: const Text('Solicitar cambio'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Implement shift exchange
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Funcionalidad de cambio de turno no implementada')),
+                  );
+                },
+              ),
+            if (shift.status == 'PENDING' || shift.status == 'EXCHANGED')
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Eliminar turno'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteShift(shift.id);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Ver detalles'),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Navigate to shift details
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFilterDialog() async {
+    final String? selectedRole = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Filtrar por rol'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('Todos los roles'),
+              value: 'all',
+              groupValue: _selectedRole,
+              onChanged: (value) => Navigator.pop(context, value),
+            ),
+            RadioListTile<String>(
+              title: const Text('Médico'),
+              value: 'MEDICO',
+              groupValue: _selectedRole,
+              onChanged: (value) => Navigator.pop(context, value),
+            ),
+            RadioListTile<String>(
+              title: const Text('Enfermero/a'),
+              value: 'ENFERMERO',
+              groupValue: _selectedRole,
+              onChanged: (value) => Navigator.pop(context, value),
+            ),
+            RadioListTile<String>(
+              title: const Text('TCAE'),
+              value: 'TCAE',
+              groupValue: _selectedRole,
+              onChanged: (value) => Navigator.pop(context, value),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selectedRole != null && selectedRole != _selectedRole) {
+      setState(() {
+        _selectedRole = selectedRole;
+      });
+      _loadShifts();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mis Turnos'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _showFilterDialog,
+            tooltip: 'Filtrar',
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          onTap: (index) {
+            setState(() {
+              _selectedFilter = index == 0 ? 'all' : (index == 1 ? 'upcoming' : 'past');
+              _loadShifts();
+            });
+          },
+          tabs: const [
+            Tab(text: 'Todos'),
+            Tab(text: 'Próximos'),
+            Tab(text: 'Pasados'),
+          ],
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _loadShifts(showLoading: false),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadShifts,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _shifts.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.calendar_today_outlined,
+                              size: 64,
+                              color: Theme.of(context).disabledColor,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No hay turnos para mostrar',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Theme.of(context).disabledColor,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Intenta cambiar los filtros o vuelve más tarde',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).disabledColor,
+                                  ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        itemCount: _shifts.length,
+                        itemBuilder: (context, index) => _buildShiftCard(_shifts[index]),
+                      ),
+      ),
+    );
+  }
+}
+
+extension StringExtension on String {
+  String capitalizeFirst() {
+    if (isEmpty) return this;
+    return '${this[0].toUpperCase()}${substring(1)}';
+  }
+}

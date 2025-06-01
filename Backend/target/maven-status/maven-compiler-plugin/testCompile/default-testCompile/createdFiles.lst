@@ -1,2 +1,3 @@
-com\calendario\trabajadores\services\viaje\ViajeServiceTest.class
-com\calendario\trabajadores\services\turno\TurnoServiceTest.class
+com\gestorhorarios\service\HorarioServiceTest.class
+com\gestorhorarios\controller\HorarioControllerTest$1.class
+com\gestorhorarios\controller\HorarioControllerTest.class

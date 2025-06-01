@@ -10,6 +10,7 @@ class Horario {
   final String? notas;
   final TipoJornada tipoJornada;
   final bool activo;
+  final List<String> roles; // Lista de roles para este horario
 
   Horario({
     this.id,
@@ -21,19 +22,46 @@ class Horario {
     this.notas,
     required this.tipoJornada,
     this.activo = true,
-  });
+    List<String>? roles,
+  }) : roles = roles ?? [];
 
   factory Horario.fromJson(Map<String, dynamic> json) {
+    // Procesar los roles si vienen en la respuesta
+    List<String> roles = [];
+    if (json['roles'] != null && json['roles'] is List) {
+      roles = (json['roles'] as List).map((role) {
+        // Asegurar que el rol tenga el formato correcto (sin prefijo ROLE_)
+        final roleStr = role.toString();
+        return roleStr.replaceFirst('ROLE_', '');
+      }).toList();
+    }
+
+    // Manejar el tipo de jornada (puede venir como 'tipoJornada' o 'tipoTurno')
+    final tipoJornadaStr = json['tipoJornada']?.toString() ?? 
+                           json['tipoTurno']?.toString() ?? '';
+
+    // Manejar la fecha (puede venir en diferentes formatos)
+    DateTime parseFecha(dynamic fecha) {
+      if (fecha == null) return DateTime.now();
+      if (fecha is DateTime) return fecha;
+      try {
+        return DateTime.parse(fecha.toString());
+      } catch (e) {
+        return DateTime.now();
+      }
+    }
+
     return Horario(
-      id: json['id'],
-      fecha: DateTime.parse(json['fecha']),
-      horaInicio: json['horaInicio'],
-      horaFin: json['horaFin'],
-      usuario: json['usuario'] != null ? User.fromJson(json['usuario']) : null,
-      usuarioId: json['usuarioId'],
-      notas: json['notas'],
-      tipoJornada: TipoJornadaExtension.fromString(json['tipoJornada']),
-      activo: json['activo'] ?? true,
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0'),
+      fecha: parseFecha(json['fecha']),
+      horaInicio: json['horaInicio']?.toString() ?? '',
+      horaFin: json['horaFin']?.toString() ?? '',
+      usuario: json['usuario'] != null ? User.fromJson(json['usuario'] is Map ? json['usuario'] : {}) : null,
+      usuarioId: json['usuarioId'] is int ? json['usuarioId'] : int.tryParse(json['usuarioId']?.toString() ?? '0'),
+      notas: json['notas']?.toString(),
+      tipoJornada: TipoJornadaExtension.fromString(tipoJornadaStr),
+      activo: json['activo'] ?? json['disponible'] ?? true,
+      roles: roles,
     );
   }
 
@@ -42,13 +70,20 @@ class Horario {
       'fecha': fecha.toIso8601String().split('T')[0],
       'horaInicio': horaInicio,
       'horaFin': horaFin,
-      'tipoJornada': tipoJornada.toString().split('.').last,
+      'tipoTurno': tipoJornada.toString().split('.').last,
+      'disponible': true, // Por defecto, un nuevo horario está disponible
       'activo': activo,
     };
 
     if (id != null) data['id'] = id;
     if (usuarioId != null) data['usuarioId'] = usuarioId;
-    if (notas != null) data['notas'] = notas;
+    if (notas != null && notas!.isNotEmpty) data['notas'] = notas;
+    if (roles.isNotEmpty) {
+      // Asegurar que los roles tengan el prefijo ROLE_ y estén en mayúsculas
+      data['roles'] = roles.map((rol) => 
+        rol.toUpperCase().startsWith('ROLE_') ? rol.toUpperCase() : 'ROLE_${rol.toUpperCase()}'
+      ).toList();
+    }
 
     return data;
   }
@@ -63,6 +98,7 @@ class Horario {
     String? notas,
     TipoJornada? tipoJornada,
     bool? activo,
+    List<String>? roles,
   }) {
     return Horario(
       id: id ?? this.id,
@@ -74,6 +110,7 @@ class Horario {
       notas: notas ?? this.notas,
       tipoJornada: tipoJornada ?? this.tipoJornada,
       activo: activo ?? this.activo,
+      roles: roles ?? this.roles,
     );
   }
   

@@ -1,13 +1,16 @@
 package com.gestorhorarios.controller;
 
+import com.gestorhorarios.model.Horario;
 import com.gestorhorarios.model.User;
 import com.gestorhorarios.security.CurrentUser;
 import com.gestorhorarios.security.UserPrincipal;
+import com.gestorhorarios.service.HorarioService;
 import com.gestorhorarios.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -19,9 +22,11 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final HorarioService horarioService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, HorarioService horarioService) {
         this.userService = userService;
+        this.horarioService = horarioService;
     }
 
     /**
@@ -83,5 +88,32 @@ public class UserController {
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok().build();
+    }
+    
+    /**
+     * Obtiene los horarios de un usuario específico.
+     * 
+     * @param id ID del usuario
+     * @return Lista de horarios del usuario
+     */
+    @GetMapping("/{id}/schedules")
+    public ResponseEntity<List<Horario>> getUserSchedules(
+            @PathVariable Long id,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
+        
+        User user = userService.findUserById(id);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        List<Horario> schedules;
+        if (startDate != null && endDate != null) {
+            schedules = horarioService.findByUsuarioAndFechaBetween(user, startDate, endDate);
+        } else {
+            schedules = horarioService.findByUsuario(user);
+        }
+        
+        return ResponseEntity.ok(schedules);
     }
 }

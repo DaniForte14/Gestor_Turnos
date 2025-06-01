@@ -3,18 +3,20 @@ class ApiConstants {
   static const String baseUrl = 'http://192.168.1.40:8080';
   
   // Endpoints de autenticación
-  static const String login = '/auth/login';
-  static const String register = '/auth/register';
-  static const String refreshToken = '/auth/refresh';
+  static const String login = '/api/auth/login';
+  static const String register = '/api/auth/register';
+  static const String refreshToken = '/api/auth/refresh';
   
   // Endpoints de usuarios
-  static const String users = '/users';
-  static const String userProfile = '/users/profile';
+  static const String users = '/api/users';
+  static const String userProfile = '/api/users/profile';
   
   // Endpoints de horarios
-  static const String horarios = '/horarios';
-  static const String horariosByUser = '/horarios/mis-horarios';
-  static const String horariosByDate = '/horarios/fecha';
+  static const String horarios = '/api/horarios';
+  static const String horariosByUser = '/api/horarios/mis-horarios';
+  static const String horariosByDate = '/api/horarios/fecha';
+  static const String horariosDisponibles = '/api/horarios/disponibles';
+  static const String horariosDisponiblesPorRol = '/api/horarios/disponibles/rol';
   
   // Endpoints de solicitudes de cambio
   static const String solicitudes = '/solicitudes';
@@ -23,8 +25,8 @@ class ApiConstants {
   static const String solicitudCancelar = '/solicitudes/cancelar';
   
   // Endpoints de vehículos
-  static const String vehiculos = '/vehiculos';
-  static const String misVehiculos = '/vehiculos/mis-vehiculos';
+  static const String vehicles = '/api/vehicles';
+  static const String myVehicles = '/api/vehicles/my-vehicles'; // Endpoint for getting user's vehicles
   
   // HTTP Status codes
   static const int ok = 200;

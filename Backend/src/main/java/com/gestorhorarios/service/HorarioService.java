@@ -78,7 +78,7 @@ public class HorarioService {
     }
 
     @Transactional
-    public Horario crearHorario(Horario horario) {
+    public Horario crearHorario(Horario horario, String rol) {
         // Validaciones básicas
         if (horario.getFecha() == null) {
             throw new IllegalArgumentException("La fecha del horario es obligatoria");
@@ -90,6 +90,39 @@ public class HorarioService {
             throw new IllegalArgumentException("La hora de fin no puede ser anterior a la hora de inicio");
         }
         
+        // Asegurarse de que el usuario existe
+        if (horario.getUsuario() == null || horario.getUsuario().getId() == null) {
+            throw new IllegalArgumentException("El usuario es obligatorio");
+        }
+        
+        User usuario = userService.findUserById(horario.getUsuario().getId());
+        if (usuario == null) {
+            throw new IllegalArgumentException("Usuario no encontrado");
+        }
+        
+        // Validar el rol
+        if (rol == null || rol.trim().isEmpty()) {
+            throw new IllegalArgumentException("El rol es obligatorio");
+        }
+        
+        // Normalizar el rol
+        String normalizedRol = rol.trim().toUpperCase();
+        if (!normalizedRol.startsWith("ROLE_")) {
+            normalizedRol = "ROLE_" + normalizedRol;
+        }
+        
+        // Verificar que el rol sea uno de los permitidos
+        try {
+            Role role = Role.valueOf(normalizedRol);
+            if (role != Role.ROLE_TCAE && role != Role.ROLE_MEDICO && role != Role.ROLE_ENFERMERO) {
+                throw new IllegalArgumentException("Rol no permitido. Los roles permitidos son: ROLE_TCAE, ROLE_MEDICO, ROLE_ENFERMERO");
+            }
+            horario.setRol(role);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Rol no válido. Los roles permitidos son: ROLE_TCAE, ROLE_MEDICO, ROLE_ENFERMERO");
+        }
+        
+        // Guardar el horario
         return horarioRepository.save(horario);
     }
 
@@ -140,5 +173,33 @@ public class HorarioService {
     public Horario obtenerHorarioPorId(Long id) {
         return horarioRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Horario", "id", id));
+    }
+    
+    /**
+     * Obtiene todos los horarios de un usuario.
+     * 
+     * @param usuario Usuario del que se quieren obtener los horarios
+     * @return Lista de horarios del usuario
+     */
+    public List<Horario> findByUsuario(User usuario) {
+        return horarioRepository.findByUsuario(usuario);
+    }
+    
+    /**
+     * Obtiene los horarios de un usuario en un rango de fechas.
+     * 
+     * @param usuario Usuario del que se quieren obtener los horarios
+     * @param fechaInicio Fecha de inicio del rango
+     * @param fechaFin Fecha de fin del rango
+     * @return Lista de horarios del usuario en el rango de fechas especificado
+     */
+    public List<Horario> findByUsuarioAndFechaBetween(User usuario, LocalDate fechaInicio, LocalDate fechaFin) {
+        if (fechaInicio == null || fechaFin == null) {
+            throw new IllegalArgumentException("Las fechas de inicio y fin son obligatorias");
+        }
+        if (fechaFin.isBefore(fechaInicio)) {
+            throw new IllegalArgumentException("La fecha de fin no puede ser anterior a la fecha de inicio");
+        }
+        return horarioRepository.findByUsuarioAndFechaBetween(usuario, fechaInicio, fechaFin);
     }
 }

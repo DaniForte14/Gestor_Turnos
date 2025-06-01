@@ -9,10 +9,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api/test")
@@ -65,9 +63,7 @@ public class TestRegistroController {
             user.setTelefono("123456789");
             
             // Asignar rol (ROLE_USER)
-            Set<Role> roles = new HashSet<>();
-            roles.add(Role.ROLE_USER);
-            user.setRoles(roles);
+            user.setRole(Role.ROLE_USER);
             
             // Guardar el usuario de prueba
             User savedUser = userRepository.save(user);
@@ -168,10 +164,8 @@ public class TestRegistroController {
             user.setLocalidad(localidad);
             user.setTelefono(telefono);
             
-            // Asignar rol por defecto (ROLE_USER)
-            Set<Role> roles = new HashSet<>();
-            roles.add(Role.ROLE_USER);
-            user.setRoles(roles);
+            // Asignar rol (ROLE_ADMIN)
+            user.setRole(Role.ROLE_ADMIN);
             
             System.out.println("Usuario preparado para guardar: " + user);
             

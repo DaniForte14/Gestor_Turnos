@@ -1,0 +1,134 @@
+{
+  "groups": [
+    {
+      "name": "app.cors",
+      "type": "com.gestorhorarios.config.CorsConfig",
+      "sourceType": "com.gestorhorarios.config.CorsConfig"
+    },
+    {
+      "name": "app.cors",
+      "type": "com.gestorhorarios.config.CorsProperties",
+      "sourceType": "com.gestorhorarios.config.CorsProperties"
+    },
+    {
+      "name": "app.jwt",
+      "type": "com.gestorhorarios.config.JwtProperties",
+      "sourceType": "com.gestorhorarios.config.JwtProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "app.cors.allow-credentials",
+      "type": "java.lang.Boolean",
+      "description": "Whether credentials are supported for CORS"
+    },
+    {
+      "name": "app.cors.allow-credentials",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.gestorhorarios.config.CorsConfig",
+      "defaultValue": true
+    },
+    {
+      "name": "app.cors.allow-credentials",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.gestorhorarios.config.CorsProperties",
+      "defaultValue": false
+    },
+    {
+      "name": "app.cors.allowed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "description": "List of allowed headers for CORS"
+    },
+    {
+      "name": "app.cors.allowed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsConfig"
+    },
+    {
+      "name": "app.cors.allowed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsProperties"
+    },
+    {
+      "name": "app.cors.allowed-methods",
+      "type": "java.util.List<java.lang.String>",
+      "description": "List of allowed HTTP methods for CORS"
+    },
+    {
+      "name": "app.cors.allowed-methods",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsConfig"
+    },
+    {
+      "name": "app.cors.allowed-methods",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsProperties"
+    },
+    {
+      "name": "app.cors.allowed-origin-patterns",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsConfig"
+    },
+    {
+      "name": "app.cors.allowed-origin-patterns",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsProperties"
+    },
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "List of allowed origins for CORS"
+    },
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsConfig"
+    },
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsProperties"
+    },
+    {
+      "name": "app.cors.exposed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "description": "List of exposed headers for CORS"
+    },
+    {
+      "name": "app.cors.exposed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsConfig"
+    },
+    {
+      "name": "app.cors.exposed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.gestorhorarios.config.CorsProperties"
+    },
+    {
+      "name": "app.cors.max-age",
+      "type": "java.lang.Long",
+      "sourceType": "com.gestorhorarios.config.CorsConfig",
+      "defaultValue": 3600
+    },
+    {
+      "name": "app.cors.max-age",
+      "type": "java.lang.Long",
+      "sourceType": "com.gestorhorarios.config.CorsProperties",
+      "defaultValue": 3600
+    },
+    {
+      "name": "app.jwt.expiration-ms",
+      "type": "java.lang.Long",
+      "description": "JWT token expiration time in milliseconds",
+      "sourceType": "com.gestorhorarios.config.JwtProperties",
+      "defaultValue": 0
+    },
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "description": "JWT secret key used for signing tokens",
+      "sourceType": "com.gestorhorarios.config.JwtProperties"
+    }
+  ],
+  "hints": []
+}

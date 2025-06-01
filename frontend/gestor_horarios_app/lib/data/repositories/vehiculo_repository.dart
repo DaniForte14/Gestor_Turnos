@@ -1,127 +1,131 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gestor_horarios_app/core/constants/api_constants.dart';
-import 'package:gestor_horarios_app/core/utils/api_client.dart';
-import 'package:gestor_horarios_app/data/models/vehiculo.dart';
 
 class VehiculoRepository {
-  final ApiClient _apiClient;
-  
-  VehiculoRepository(this._apiClient);
-  
-  Future<List<Vehiculo>> getVehiculosDisponibles() async {
-    try {
-      final response = await _apiClient.get(ApiConstants.vehiculos);
-      
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        return data.map((item) => Vehiculo.fromJson(item)).toList();
-      }
-      return [];
-    } catch (e) {
-      print('Error obteniendo vehículos disponibles: $e');
-      return [];
-    }
+  Future<Map<String, String>> _getHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
   }
-  
-  Future<List<Vehiculo>> getMisVehiculos() async {
+
+  Future<Map<String, dynamic>> crearVehiculo(Map<String, dynamic> vehiculo) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/vehicles');
+    
     try {
-      final response = await _apiClient.get(ApiConstants.misVehiculos);
-      
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        return data.map((item) => Vehiculo.fromJson(item)).toList();
-      }
-      return [];
-    } catch (e) {
-      print('Error obteniendo mis vehículos: $e');
-      return [];
-    }
-  }
-  
-  Future<Vehiculo?> getVehiculoPorId(int id) async {
-    try {
-      final response = await _apiClient.get('${ApiConstants.vehiculos}/$id');
-      
-      if (response.statusCode == 200) {
-        return Vehiculo.fromJson(response.data);
-      }
-      return null;
-    } catch (e) {
-      print('Error obteniendo vehículo por ID: $e');
-      return null;
-    }
-  }
-  
-  Future<Vehiculo?> getVehiculoPorMatricula(String matricula) async {
-    try {
-      final response = await _apiClient.get('${ApiConstants.vehiculos}/matricula/$matricula');
-      
-      if (response.statusCode == 200) {
-        return Vehiculo.fromJson(response.data);
-      }
-      return null;
-    } catch (e) {
-      print('Error obteniendo vehículo por matrícula: $e');
-      return null;
-    }
-  }
-  
-  Future<Vehiculo?> registrarVehiculo(Vehiculo vehiculo) async {
-    try {
-      final response = await _apiClient.post(
-        ApiConstants.vehiculos,
-        data: vehiculo.toJson(),
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(vehiculo),
       );
-      
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return Vehiculo.fromJson(response.data);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Error al crear el vehículo: ${response.body}');
       }
-      return null;
     } catch (e) {
-      print('Error registrando vehículo: $e');
-      return null;
+      throw Exception('Error de conexión: $e');
     }
   }
-  
-  Future<Vehiculo?> actualizarVehiculo(Vehiculo vehiculo) async {
+
+  Future<List<dynamic>> obtenerVehiculos() async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/vehicles');
+    
     try {
-      if (vehiculo.id == null) return null;
-      
-      final response = await _apiClient.put(
-        '${ApiConstants.vehiculos}/${vehiculo.id}',
-        data: vehiculo.toJson(),
-      );
+      final response = await http.get(url, headers: headers);
       
       if (response.statusCode == 200) {
-        return Vehiculo.fromJson(response.data);
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Error al obtener los vehículos: ${response.body}');
       }
-      return null;
     } catch (e) {
-      print('Error actualizando vehículo: $e');
-      return null;
+      throw Exception('Error de conexión: $e');
     }
   }
-  
+
   Future<bool> eliminarVehiculo(int id) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/vehicles/$id');
+    
     try {
-      final response = await _apiClient.delete('${ApiConstants.vehiculos}/$id');
-      return response.statusCode == 200;
+      final response = await http.delete(
+        url,
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return true;
+      } else {
+        throw Exception('Error al eliminar el vehículo: ${response.body}');
+      }
     } catch (e) {
-      print('Error eliminando vehículo: $e');
-      return false;
+      throw Exception('Error de conexión: $e');
     }
   }
-  
-  Future<bool> cambiarEstadoActivo(int id, bool activo) async {
+
+  Future<bool> unirseAVehiculo(int vehiculoId) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/vehicles/$vehiculoId/join');
+    
     try {
-      final response = await _apiClient.put(
-        '${ApiConstants.vehiculos}/$id/activo/$activo',
-        data: {},
+      final response = await http.post(
+        url,
+        headers: headers,
       );
-      
-      return response.statusCode == 200;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      } else {
+        throw Exception('Error al unirse al vehículo: ${response.body}');
+      }
     } catch (e) {
-      print('Error cambiando estado activo: $e');
-      return false;
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  Future<bool> salirDeVehiculo(int vehiculoId) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/vehicles/$vehiculoId/leave');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return true;
+      } else {
+        throw Exception('Error al salir del vehículo: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  Future<bool> estaVehiculo(int vehiculoId) async {
+    final headers = await _getHeaders();
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/vehicles/$vehiculoId/check');
+    
+    try {
+      final response = await http.get(url, headers: headers);
+      
+      if (response.statusCode == 200) {
+        // The backend returns a raw boolean value
+        return response.body.toLowerCase() == 'true';
+      } else {
+        throw Exception('Error al verificar el estado del vehículo: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
     }
   }
 }

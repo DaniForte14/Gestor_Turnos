@@ -1,85 +1,116 @@
 -- Esquema para la base de datos del gestor de horarios
 
+-- Configuración de charset y collation por defecto
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
 -- Tabla de usuarios
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    nombre VARCHAR(100) NOT NULL,
-    apellidos VARCHAR(100) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
-    centro_trabajo VARCHAR(100) NOT NULL,
-    localidad VARCHAR(100) NOT NULL,
-    telefono VARCHAR(20),
+    work_center VARCHAR(100) NOT NULL,
+    location VARCHAR(100) NOT NULL,
+    phone VARCHAR(20),
+    role VARCHAR(50) NOT NULL DEFAULT 'ROLE_USER',
     is_admin BOOLEAN DEFAULT FALSE,
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_role CHECK (role IN ('ROLE_ADMIN', 'ROLE_MEDICO', 'ROLE_ENFERMERO', 'ROLE_AUXILIAR', 'ROLE_USER')),
+    INDEX idx_username (username),
+    INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Tabla de roles de usuario
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id BIGINT NOT NULL,
-    role VARCHAR(50) NOT NULL,
-    PRIMARY KEY (user_id, role),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+-- Migrar datos existentes desde user_roles a users (ejecutar solo una vez después de la migración)
+-- UPDATE users u
+-- JOIN user_roles ur ON u.id = ur.user_id
+-- SET u.role = ur.role,
+--     u.is_admin = (ur.role = 'ROLE_ADMIN');
+
+-- Eliminar la tabla user_roles después de migrar los datos
+-- DROP TABLE IF EXISTS user_roles;
 
 -- Tabla de vehículos
-CREATE TABLE IF NOT EXISTS vehiculos (
+CREATE TABLE IF NOT EXISTS vehicles (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    marca VARCHAR(50) NOT NULL,
-    modelo VARCHAR(50) NOT NULL,
-    matricula VARCHAR(20) NOT NULL UNIQUE,
-    color VARCHAR(30),
-    asientos_disponibles INTEGER,
-    usuario_id BIGINT NOT NULL,
-    activo BOOLEAN DEFAULT TRUE,
-    observaciones VARCHAR(500),
-    FOREIGN KEY (usuario_id) REFERENCES users(id)
-);
+    brand VARCHAR(50) NOT NULL,
+    model VARCHAR(50) NOT NULL,
+    license_plate VARCHAR(20) NOT NULL UNIQUE,
+    total_seats INTEGER NOT NULL,
+    available_seats INTEGER NOT NULL,
+    owner_id BIGINT,
+    active BOOLEAN DEFAULT TRUE,
+    observations TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_license_plate (license_plate),
+    INDEX idx_owner (owner_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabla de relación muchos a muchos entre vehículos y pasajeros
+CREATE TABLE IF NOT EXISTS user_vehicle_passengers (
+    vehicle_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    PRIMARY KEY (user_id, vehicle_id),
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_vehicle_passenger (vehicle_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Tabla de horarios
-CREATE TABLE IF NOT EXISTS horarios (
+CREATE TABLE IF NOT EXISTS schedules (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    usuario_id BIGINT NOT NULL,
-    fecha DATE NOT NULL,
-    hora_inicio TIME,
-    hora_fin TIME,
-    tipo_turno VARCHAR(20),
-    disponible BOOLEAN DEFAULT FALSE,
-    intercambiado BOOLEAN DEFAULT FALSE,
-    notas VARCHAR(500),
-    FOREIGN KEY (usuario_id) REFERENCES users(id)
+    user_id BIGINT NOT NULL,
+    date DATE NOT NULL,
+    start_time TIME,
+    end_time TIME,
+    shift_type VARCHAR(20),
+    available BOOLEAN DEFAULT FALSE,
+    exchanged BOOLEAN DEFAULT FALSE,
+    notes VARCHAR(500), 
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 -- Tabla de solicitudes de cambio
-CREATE TABLE IF NOT EXISTS solicitudes_cambio (
+CREATE TABLE IF NOT EXISTS shift_change_requests (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    solicitante_id BIGINT NOT NULL,
-    receptor_id BIGINT,
-    horario_origen_id BIGINT NOT NULL,
-    horario_destino_id BIGINT,
-    estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
-    mensaje TEXT,
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_respuesta TIMESTAMP,
-    FOREIGN KEY (solicitante_id) REFERENCES users(id),
-    FOREIGN KEY (receptor_id) REFERENCES users(id),
-    FOREIGN KEY (horario_origen_id) REFERENCES horarios(id),
-    FOREIGN KEY (horario_destino_id) REFERENCES horarios(id)
+    requester_id BIGINT NOT NULL,
+    receiver_id BIGINT,
+    source_schedule_id BIGINT NOT NULL,
+    target_schedule_id BIGINT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    responded_at TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_id) REFERENCES users(id),
+    FOREIGN KEY (source_schedule_id) REFERENCES schedules(id),
+    FOREIGN KEY (target_schedule_id) REFERENCES schedules(id)
 );
 
 -- Índices para optimizar consultas
 -- En MySQL, simplemente creamos los índices directamente
 -- Si el índice ya existe, MySQL ignorará el error con esta sintaxis
 
--- Índices para tabla horarios
-CREATE INDEX idx_horarios_usuario ON horarios(usuario_id);
-CREATE INDEX idx_horarios_fecha ON horarios(fecha);
+-- Índices para tabla schedules
+CREATE INDEX idx_schedules_user ON schedules(user_id);
+CREATE INDEX idx_schedules_date ON schedules(date);
 
--- Índices para tabla solicitudes_cambio
-CREATE INDEX idx_solicitudes_solicitante ON solicitudes_cambio(solicitante_id);
-CREATE INDEX idx_solicitudes_receptor ON solicitudes_cambio(receptor_id);
+-- Índices para tabla shift_change_requests
+CREATE INDEX idx_shift_requests_requester ON shift_change_requests(requester_id);
+CREATE INDEX idx_shift_requests_receiver ON shift_change_requests(receiver_id);
 
--- Índice para tabla vehiculos
-CREATE INDEX idx_vehiculos_usuario ON vehiculos(usuario_id);
+-- Índice para tabla vehicles
+CREATE INDEX idx_vehicles_owner ON vehicles(owner_id);
+
+-- Tabla para almacenar los roles permitidos para cada horario
+CREATE TABLE IF NOT EXISTS schedule_roles (
+    schedule_id BIGINT NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    PRIMARY KEY (schedule_id, role),
+    FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE
+);
