@@ -3,6 +3,8 @@ import 'package:gestor_horarios_app/screens/horarios_disponibles_screen.dart';
 import 'package:gestor_horarios_app/screens/admin/publicar_horario_screen.dart';
 import 'package:gestor_horarios_app/presentation/vehiculos/vehiculos_screen.dart';
 
+
+
 class AppRouter {
   static const String home = '/';
   static const String horariosDisponibles = '/horarios-disponibles';

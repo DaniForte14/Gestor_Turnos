@@ -2,6 +2,7 @@ package com.gestorhorarios.repository;
 
 import com.gestorhorarios.model.User;
 import com.gestorhorarios.model.Vehicle;
+import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +17,9 @@ import java.util.Optional;
 @Repository
 public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     
+    @Query("SELECT v FROM Vehicle v LEFT JOIN FETCH v.owner LEFT JOIN FETCH v.passengers WHERE v.id = :id")
+    Optional<Vehicle> findByIdWithRelations(@Param("id") Long id);
+    
     /**
      * Find all active vehicles
      * @return List of active vehicles
@@ -28,6 +32,28 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
      */
     @Query("SELECT v FROM Vehicle v LEFT JOIN FETCH v.owner")
     List<Vehicle> findAllWithOwner();
+    
+    /**
+     * Busca un vehículo por su ID cargando también sus pasajeros
+     * @param id ID del vehículo
+     * @return El vehículo con sus pasajeros cargados
+     */
+    @Query("SELECT DISTINCT v FROM Vehicle v LEFT JOIN FETCH v.passengers WHERE v.id = :id")
+    Optional<Vehicle> findByIdWithPassengers(@Param("id") Long id);
+    
+    /**
+     * Busca todos los vehículos cargando también sus pasajeros
+     * @return Lista de vehículos con sus pasajeros cargados
+     */
+    @Query("SELECT DISTINCT v FROM Vehicle v LEFT JOIN FETCH v.passengers")
+    List<Vehicle> findAllWithPassengers();
+    
+    /**
+     * Find all vehicles with available seats greater than the specified value
+     * @param seats Minimum number of available seats
+     * @return List of vehicles with available seats greater than the specified value
+     */
+    List<Vehicle> findByAvailableSeatsGreaterThan(int seats);
     
     /**
      * Find all active vehicles for a specific user by user ID
@@ -131,4 +157,11 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
      * @return The count of active vehicles owned by the specified user
      */
 
+    /**
+     * Find all passengers of a specific vehicle
+     * @param vehicleId The ID of the vehicle
+     * @return Set of users who are passengers of the specified vehicle
+     */
+    @Query("SELECT v.passengers FROM Vehicle v WHERE v.id = :vehicleId")
+    Set<User> findPassengersByVehicleId(@Param("vehicleId") Long vehicleId);
 }

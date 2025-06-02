@@ -1,20 +1,37 @@
 package com.gestorhorarios.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Data
 @Entity
 @Table(name = "vehicles")
-public class Vehicle {
+@Data
+@Builder(toBuilder = true)
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIdentityInfo(
+    generator = ObjectIdGenerators.PropertyGenerator.class,
+    property = "id"
+)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+public class Vehicle implements Serializable {
+    private static final long serialVersionUID = 1L;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
     
     @Column(nullable = false)
@@ -29,15 +46,22 @@ public class Vehicle {
     private String color;
     
     @Column(name = "total_seats", nullable = false)
-    private Integer totalSeats;
+    @Builder.Default
+    private int totalSeats = 4;
     
     @Column(name = "available_seats", nullable = false)
-    private Integer availableSeats;
+    @Builder.Default
+    private int availableSeats = 3;
     
     private String observations;
     
     @Column(nullable = false)
-    private Boolean active = true;
+    @Builder.Default
+    private boolean active = true;
+    
+    public boolean isActive() {
+        return active;
+    }
     
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -46,34 +70,42 @@ public class Vehicle {
     private LocalDateTime updatedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id")
-    @JsonIgnore
+    @JoinColumn(name = "owner_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "vehicle", "vehiclesAsPassenger"})
+    @ToString.Exclude
     private User owner;
     
     @ManyToMany(mappedBy = "vehiclesAsPassenger", fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "vehicle", "vehiclesAsPassenger"})
+    @ToString.Exclude
     @JsonIgnore
+    @Builder.Default
     private Set<User> passengers = new HashSet<>();
     
     // Helper methods for managing passengers
     public boolean addPassenger(User user) {
-        if (availableSeats <= 0) {
+        if (user == null) {
             return false;
         }
-        if (passengers.add(user)) {
-            user.setVehicle(this);
-            availableSeats--;
-            return true;
+        if (passengers == null) {
+            passengers = new HashSet<>();
         }
-        return false;
+        boolean added = passengers.add(user);
+        if (added) {
+            user.addVehicleAsPassenger(this);
+        }
+        return added;
     }
     
     public boolean removePassenger(User user) {
-        if (passengers.remove(user)) {
-            user.setVehicle(null);
-            availableSeats++;
-            return true;
+        if (user == null || passengers == null) {
+            return false;
         }
-        return false;
+        boolean removed = passengers.remove(user);
+        if (removed) {
+            user.removeVehicleAsPassenger(this);
+        }
+        return removed;
     }
     
     /**
@@ -94,6 +126,8 @@ public class Vehicle {
         return passengers.remove(user);
     }
     
+    // No duplicate methods needed - using the ones above with bidirectional relationship support
+    
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -103,19 +137,6 @@ public class Vehicle {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
-    }
-    
-    @Override
-    public String toString() {
-        return "Vehicle{" +
-                "id=" + id +
-                ", brand='" + brand + '\'' +
-                ", model='" + model + '\'' +
-                ", licensePlate='" + licensePlate + '\'' +
-                ", totalSeats=" + totalSeats +
-                ", availableSeats=" + availableSeats +
-                ", active=" + active +
-                '}';
     }
     
     // JSON view methods

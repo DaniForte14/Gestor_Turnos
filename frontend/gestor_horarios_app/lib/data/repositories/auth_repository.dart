@@ -6,6 +6,7 @@ import 'package:gestor_horarios_app/data/services/api_service.dart';
 
 class AuthRepository {
   final ApiService _apiService = ApiService();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
   
   // Método de login mejorado con manejo de roles
   // Método auxiliar para obtener los roles de un usuario
@@ -149,8 +150,9 @@ class AuthRepository {
         final username = response['username'] ?? 'admin';
         
         // Guardar datos del usuario
+        final fetchedUserId = response['userId'] ?? 1; // Usar ID 1 para admin si no está presente
         final userData = {
-          'id': response['userId'] ?? 1, // Usar ID 1 para admin si no está presente
+          'id': fetchedUserId,
           'username': username,
           'email': response['email'] ?? '$username@example.com',
           'nombre': response['nombre'] ?? username,
@@ -159,7 +161,11 @@ class AuthRepository {
           'isAdmin': isAdmin,
         };
         
+        // Guardar en SharedPreferences
         await prefs.setString('user_data', jsonEncode(userData));
+        
+        // Guardar el ID de usuario en el almacenamiento seguro
+        await _storage.write(key: 'user_id', value: userId.toString());
         
         // Devolver información adicional sobre el login, incluyendo los roles
         final loginResponse = {

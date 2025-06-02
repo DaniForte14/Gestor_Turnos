@@ -31,12 +31,14 @@ com\gestorhorarios\dto\HorarioRequest.class
 com\gestorhorarios\config\DatabaseInitializer.class
 com\gestorhorarios\controller\HorarioController.class
 com\gestorhorarios\service\HorarioService.class
+com\gestorhorarios\dto\VehicleResponseDTO.class
 com\gestorhorarios\repository\VehicleRepository.class
 com\gestorhorarios\security\UserSecurity.class
 com\gestorhorarios\dto\VehicleResponse$VehicleResponseBuilder.class
 com\gestorhorarios\config\WebMvcConfig.class
 com\gestorhorarios\mapper\UserMapper.class
 com\gestorhorarios\exception\ResourceNotFoundException.class
+com\gestorhorarios\model\Vehicle$VehicleBuilder.class
 com\gestorhorarios\service\VehicleService.class
 com\gestorhorarios\controller\AuthController.class
 com\gestorhorarios\security\SecurityConfig.class
@@ -46,6 +48,7 @@ com\gestorhorarios\security\CurrentUser.class
 com\gestorhorarios\controller\SolicitudCambioController.class
 com\gestorhorarios\dto\PassengerInfo$PassengerInfoBuilder.class
 com\gestorhorarios\security\NoOpPasswordEncoder.class
+com\gestorhorarios\model\User$UserBuilder.class
 com\gestorhorarios\exception\ErrorResponse.class
 com\gestorhorarios\service\SolicitudCambioService.class
 com\gestorhorarios\dto\ValidHorarioTimeRange$Validator.class

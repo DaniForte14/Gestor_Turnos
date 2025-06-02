@@ -8,28 +8,28 @@ import java.time.LocalDateTime;
 public class VehicleDTO {
     private Long id;
     
-    @JsonProperty("marca")
+    @JsonProperty("brand")
     private String brand;
     
-    @JsonProperty("modelo")
+    @JsonProperty("model")
     private String model;
     
-    @JsonProperty("matricula")
+    @JsonProperty("licensePlate")
     private String licensePlate;
     
     @JsonProperty("color")
     private String color;
     
-    @JsonProperty("totalAsientos")
+    @JsonProperty("totalSeats")
     private Integer totalSeats;
     
-    @JsonProperty("asientosDisponibles")
+    @JsonProperty("availableSeats")
     private Integer availableSeats;
     
-    @JsonProperty("observaciones")
+    @JsonProperty("observations")
     private String observations;
     
-    @JsonProperty("activo")
+    @JsonProperty("active")
     private Boolean active = true;
     
     private LocalDateTime createdAt;

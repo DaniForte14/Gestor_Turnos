@@ -1,13 +1,18 @@
 package com.gestorhorarios.model;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.slf4j.Logger;
@@ -18,6 +23,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Data
+@Builder(toBuilder = true)
+@NoArgsConstructor
+@AllArgsConstructor
+@ToString(exclude = {"vehicle", "vehiclesAsPassenger"})
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Entity
 @Table(name = "users")
 @JsonIdentityInfo(
@@ -59,7 +69,7 @@ public class User {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id")
-    @JsonIgnoreProperties({"passengers", "conductor"}) // Ignorar propiedades que pueden causar referencia circular
+    @JsonIgnoreProperties({"passengers", "owner", "vehiclesAsPassenger"}) // Ignorar propiedades que pueden causar referencia circular
     private Vehicle vehicle;
 
     @ManyToMany
@@ -69,7 +79,19 @@ public class User {
         inverseJoinColumns = @JoinColumn(name = "vehicle_id")
     )
     @JsonIgnore
+    @Builder.Default
     private Set<Vehicle> vehiclesAsPassenger = new HashSet<>();
+    
+    // Helper methods for bidirectional relationship
+    public void addVehicleAsPassenger(Vehicle vehicle) {
+        this.vehiclesAsPassenger.add(vehicle);
+        vehicle.getPassengers().add(this);
+    }
+    
+    public void removeVehicleAsPassenger(Vehicle vehicle) {
+        this.vehiclesAsPassenger.remove(vehicle);
+        vehicle.getPassengers().remove(this);
+    }
 
     @NotBlank(message = "La localidad es obligatoria")
     @Column(nullable = false, length = 100)

@@ -6,6 +6,7 @@ import 'package:gestor_horarios_app/core/theme/app_theme.dart';
 import 'package:gestor_horarios_app/core/utils/api_client.dart';
 import 'package:gestor_horarios_app/data/providers/auth_provider.dart';
 import 'package:gestor_horarios_app/data/providers/vehicle_provider.dart';
+import 'package:gestor_horarios_app/data/services/vehicle_service.dart';
 import 'package:gestor_horarios_app/data/repositories/horario_repository.dart';
 import 'package:gestor_horarios_app/data/repositories/vehiculo_repository.dart';
 import 'package:gestor_horarios_app/presentation/auth/login_screen.dart';
@@ -15,10 +16,11 @@ import 'package:gestor_horarios_app/presentation/admin/admin_dashboard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Inicializar servicios globales antes de ejecutar la app
-  // Initialize API client with base URL and interceptors
+  // Inicializar servicios globales
   final apiClient = ApiClient();
+  final vehicleService = VehicleService();
   
-  // Inicializar AuthProvider primero
+  // Inicializar AuthProvider
   final authProvider = AuthProvider();
   
   // Inicializar la autenticación
@@ -26,16 +28,26 @@ void main() async {
     runApp(
       MultiProvider(
         providers: [
+          // Proveedores de estado
           ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+          
+          // VehicleProvider ahora recibe el VehicleService inyectado
           ChangeNotifierProvider<VehicleProvider>(
-            create: (context) => VehicleProvider(authProvider),
+            create: (context) => VehicleProvider(
+              authProvider,
+              vehicleService: vehicleService,
+            ),
           ),
+          
+          // Repositorios
           Provider<HorarioRepository>(
             create: (_) => HorarioRepository(apiClient),
             dispose: (_, __) => apiClient.dio.close(),
           ),
+          
+          // VehiculoRepository ahora recibe el VehicleService inyectado
           Provider<VehiculoRepository>(
-            create: (_) => VehiculoRepository(),
+            create: (_) => VehiculoRepository(vehicleService: vehicleService),
           ),
         ],
         child: const GestorHorariosApp(),
